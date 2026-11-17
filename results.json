@@ -1,0 +1,712 @@
+[
+  {
+    "question": "Consortium roles: Which organizations participate in the ALPINE project, what role does each play (coordinator, materials, manufacturing, pilot operation), and which agency funds it?",
+    "query": "MATCH (p:Project {name: 'ALPINE'})<-[r:PARTICIPATES_IN]-(o:Organization)\nOPTIONAL MATCH (agency:FundingAgency)-[f:FUNDS]->(p)\nRETURN o.name AS organization,\n       [l IN labels(o) WHERE l <> 'Organization'][0] AS org_type,\n       r.role AS role,\n       r.contribution AS contribution,\n       agency.name AS funded_by,\n       f.amount AS grant_amount,\n       f.currency AS currency\nORDER BY CASE r.role WHEN 'coordinator' THEN 0 WHEN 'materials' THEN 1\n                     WHEN 'manufacturing' THEN 2 WHEN 'pilot operation' THEN 3 ELSE 4 END",
+    "records": [
+      {
+        "organization": "Halvorsen Institute of Technology",
+        "org_type": "University",
+        "role": "coordinator",
+        "contribution": "coordinated the consortium",
+        "funded_by": "European Clean Energy Council",
+        "grant_amount": 4200000,
+        "currency": "EUR"
+      },
+      {
+        "organization": "Rhine Valley University",
+        "org_type": "University",
+        "role": "materials",
+        "contribution": "developed solid-state electrolytes",
+        "funded_by": "European Clean Energy Council",
+        "grant_amount": 4200000,
+        "currency": "EUR"
+      },
+      {
+        "organization": "Lumen Storage Systems",
+        "org_type": "Company",
+        "role": "manufacturing",
+        "contribution": "manufactured the cells",
+        "funded_by": "European Clean Energy Council",
+        "grant_amount": 4200000,
+        "currency": "EUR"
+      },
+      {
+        "organization": "Fjordgrid AS",
+        "org_type": "Utility",
+        "role": "pilot operation",
+        "contribution": "operated the pilot",
+        "funded_by": "European Clean Energy Council",
+        "grant_amount": 4200000,
+        "currency": "EUR"
+      }
+    ],
+    "timings_ms": [
+      104.0,
+      100.16,
+      97.15,
+      92.87,
+      90.75
+    ]
+  },
+  {
+    "question": "Publication output: For each project, list its publications together with the authors and their affiliations.",
+    "query": "MATCH (proj:Project)<-[:RESULT_OF]-(pub:Publication)<-[a:AUTHORED]-(per:Person)\nOPTIONAL MATCH (per)-[aff:AFFILIATED_WITH]->(org:Organization)\n  WHERE aff.type IN ['employment', 'study']\n    AND coalesce(aff.start_year, 0) <= pub.year\n    AND coalesce(aff.end_year, 9999) >= pub.year\nWITH proj, pub, a.position AS pos, per, collect(org.name) AS orgs\nORDER BY proj.name, pub.year, pub.title, pos\nWITH proj, pub,\n     collect(per.name + ' (' + reduce(s = '', o IN orgs | s + CASE WHEN s = '' THEN '' ELSE ', ' END + o) + ')') AS authors\nRETURN proj.name AS project,\n       pub.title AS publication,\n       pub.year AS year,\n       pub.venue AS venue,\n       authors AS authors_with_affiliation\nORDER BY project, year, publication",
+    "records": [
+      {
+        "project": "ALPINE",
+        "publication": "Sodium-Ion Cathode Stability in Solid-State Electrolytes",
+        "year": 2022,
+        "venue": "Advanced Electrochemical Materials",
+        "authors_with_affiliation": [
+          "Katarina Novak (Rhine Valley University)",
+          "Ingrid Solberg (Halvorsen Institute of Technology)",
+          "Elena Voss (Lumen Storage Systems)"
+        ]
+      },
+      {
+        "project": "ALPINE",
+        "publication": "Sodium-Ion Cell Degradation Under Variable Grid Loads",
+        "year": 2023,
+        "venue": "Journal of Energy Storage Engineering",
+        "authors_with_affiliation": [
+          "Ingrid Solberg (Halvorsen Institute of Technology)",
+          "Sofia Lindqvist (Halvorsen Institute of Technology)",
+          "Tomas Berg (Fjordgrid AS)"
+        ]
+      },
+      {
+        "project": "CASCADE",
+        "publication": "Probabilistic Load Forecasting with Gradient-Boosted Models",
+        "year": 2023,
+        "venue": "Transactions on Smart Grid Analytics",
+        "authors_with_affiliation": [
+          "Daniel Okafor (Maple Ridge University)",
+          "Li Wei (Maple Ridge University)",
+          "Hannah Brooks (Pacific Cell Technologies)"
+        ]
+      },
+      {
+        "project": "CASCADE",
+        "publication": "Forecast-Aware Dispatch of Grid Batteries",
+        "year": 2025,
+        "venue": "Energy Systems Control Letters",
+        "authors_with_affiliation": [
+          "Hannah Brooks (Pacific Cell Technologies)",
+          "Sofia Lindqvist (Halvorsen Institute of Technology)",
+          "Daniel Okafor (Maple Ridge University)"
+        ]
+      },
+      {
+        "project": "MONSOON",
+        "publication": "Thermal Management Strategies for Stationary Batteries in Hot Climates",
+        "year": 2024,
+        "venue": "International Journal of Thermal Energy Systems",
+        "authors_with_affiliation": [
+          "Priya Raghunathan (Southern Peninsula Institute of Science)",
+          "Arjun Menon (Southern Peninsula Institute of Science)",
+          "Daniel Okafor (Maple Ridge University)"
+        ]
+      },
+      {
+        "project": "RECLAIM",
+        "publication": "Hydrometallurgical Recovery of Sodium-Ion Cathode Materials",
+        "year": 2024,
+        "venue": "Journal of Sustainable Materials Processing",
+        "authors_with_affiliation": [
+          "Markus Weber (Rhine Valley University)",
+          "Katarina Novak (Rhine Valley University)"
+        ]
+      }
+    ],
+    "timings_ms": [
+      100.71,
+      86.34,
+      106.77,
+      166.33,
+      113.44
+    ]
+  },
+  {
+    "question": "Academic lineage: Trace the complete supervision chain for every doctoral researcher (e.g. who is the \"academic grandparent\" of Sofia Lindqvist and Tomas Berg?).",
+    "query": "MATCH path = (root:Person)-[:SUPERVISED*1..]->(student:Person)\nWHERE NOT ()-[:SUPERVISED]->(root)\nWITH student, path, nodes(path) AS chain, last(relationships(path)) AS sup\nRETURN student.name AS doctoral_researcher,\n       sup.status AS doctorate_status,\n       sup.year AS completed_year,\n       chain[-2].name AS supervisor,\n       CASE WHEN size(chain) >= 3 THEN chain[-3].name END AS academic_grandparent,\n       reduce(s = head(chain).name, n IN tail(chain) | s + ' -> ' + n.name) AS supervision_chain,\n       length(path) AS generations_from_root\nORDER BY generations_from_root DESC, doctoral_researcher",
+    "records": [
+      {
+        "doctoral_researcher": "Sofia Lindqvist",
+        "doctorate_status": "ongoing",
+        "completed_year": null,
+        "supervisor": "Ingrid Solberg",
+        "academic_grandparent": "Markus Weber",
+        "supervision_chain": "Markus Weber -> Ingrid Solberg -> Sofia Lindqvist",
+        "generations_from_root": 2
+      },
+      {
+        "doctoral_researcher": "Tomas Berg",
+        "doctorate_status": "completed",
+        "completed_year": 2016,
+        "supervisor": "Ingrid Solberg",
+        "academic_grandparent": "Markus Weber",
+        "supervision_chain": "Markus Weber -> Ingrid Solberg -> Tomas Berg",
+        "generations_from_root": 2
+      },
+      {
+        "doctoral_researcher": "Arjun Menon",
+        "doctorate_status": "ongoing",
+        "completed_year": null,
+        "supervisor": "Priya Raghunathan",
+        "academic_grandparent": null,
+        "supervision_chain": "Priya Raghunathan -> Arjun Menon",
+        "generations_from_root": 1
+      },
+      {
+        "doctoral_researcher": "Hannah Brooks",
+        "doctorate_status": "completed",
+        "completed_year": 2018,
+        "supervisor": "Daniel Okafor",
+        "academic_grandparent": null,
+        "supervision_chain": "Daniel Okafor -> Hannah Brooks",
+        "generations_from_root": 1
+      },
+      {
+        "doctoral_researcher": "Ingrid Solberg",
+        "doctorate_status": "completed",
+        "completed_year": 2005,
+        "supervisor": "Markus Weber",
+        "academic_grandparent": null,
+        "supervision_chain": "Markus Weber -> Ingrid Solberg",
+        "generations_from_root": 1
+      }
+    ],
+    "timings_ms": [
+      110.27,
+      91.32,
+      101.02,
+      138.39,
+      85.37
+    ]
+  },
+  {
+    "question": "Mobility: Which researchers have been affiliated with more than one organization (employment or study), and what was the direction of each move?",
+    "query": "MATCH (p:Person)-[a:AFFILIATED_WITH]->(o:Organization)-[:LOCATED_IN]->(c:Country)\nWHERE a.type IN ['employment', 'study']\nWITH p, a, o, c\nORDER BY a.current, coalesce(a.start_year, a.end_year)\nWITH p, collect({org: o.name, type: a.type, position: a.position, start: a.start_year, end: a.end_year,\n                 country: c.name,\n                 sector: CASE WHEN o:Company THEN 'industry' WHEN o:Utility THEN 'utility' ELSE 'academia' END}) AS hist\nWHERE size(hist) > 1\nUNWIND range(0, size(hist) - 2) AS i\nWITH p, hist[i] AS f, hist[i + 1] AS t\nRETURN p.name AS researcher,\n       f.org + ' (' + f.type + ', ' + f.position + ')' AS moved_from,\n       t.org + ' (' + t.type + ', ' + t.position + ')' AS moved_to,\n       coalesce(t.start, f.end) AS year_of_move,\n       f.sector + ' -> ' + t.sector AS sector_direction,\n       f.country + ' -> ' + t.country AS geographic_direction\nORDER BY year_of_move, researcher",
+    "records": [
+      {
+        "researcher": "Ingrid Solberg",
+        "moved_from": "Rhine Valley University (study, doctoral student)",
+        "moved_to": "Halvorsen Institute of Technology (employment, professor; director, Electrochemical Storage Laboratory)",
+        "year_of_move": 2008,
+        "sector_direction": "academia -> academia",
+        "geographic_direction": "Germany -> Norway"
+      },
+      {
+        "researcher": "Tomas Berg",
+        "moved_from": "Halvorsen Institute of Technology (study, doctoral student)",
+        "moved_to": "Fjordgrid AS (employment, lead storage engineer)",
+        "year_of_move": 2016,
+        "sector_direction": "academia -> utility",
+        "geographic_direction": "Norway -> Norway"
+      },
+      {
+        "researcher": "Hannah Brooks",
+        "moved_from": "Maple Ridge University (study, doctoral student)",
+        "moved_to": "Pacific Cell Technologies (employment, head of software division)",
+        "year_of_move": 2018,
+        "sector_direction": "academia -> industry",
+        "geographic_direction": "Canada -> Canada"
+      },
+      {
+        "researcher": "Elena Voss",
+        "moved_from": "Rhine Valley University (employment, postdoctoral researcher)",
+        "moved_to": "Lumen Storage Systems (employment, senior engineer, CTO since 2022)",
+        "year_of_move": 2019,
+        "sector_direction": "academia -> industry",
+        "geographic_direction": "Germany -> Germany"
+      }
+    ],
+    "timings_ms": [
+      108.29,
+      98.06,
+      92.26,
+      169.34,
+      94.48
+    ]
+  },
+  {
+    "question": "Funding overview: For each funding agency, list the projects funded, amounts and currencies, and which companies and utilities take part in those projects.",
+    "query": "MATCH (agency:FundingAgency)-[f:FUNDS]->(p:Project)\nOPTIONAL MATCH (o:Organization)-[r:PARTICIPATES_IN]->(p)\n  WHERE o:Company OR o:Utility\nWITH agency, f, p, o, r ORDER BY o.name\nWITH agency, f, p,\n     [x IN collect(CASE WHEN o:Company THEN o.name + ' (' + r.role + ')' END) WHERE x IS NOT NULL] AS companies,\n     [x IN collect(CASE WHEN o:Utility THEN o.name + ' (' + r.role + ')' END) WHERE x IS NOT NULL] AS utilities\nRETURN agency.name AS funding_agency,\n       p.name AS project,\n       f.amount AS amount,\n       f.currency AS currency,\n       toString(f.start_year) + '-' + toString(f.end_year) AS period,\n       companies,\n       utilities\nORDER BY funding_agency, project",
+    "records": [
+      {
+        "funding_agency": "Canadian Innovation Fund",
+        "project": "CASCADE",
+        "amount": 2800000,
+        "currency": "CAD",
+        "period": "2022-2025",
+        "companies": [
+          "Pacific Cell Technologies (software integration)"
+        ],
+        "utilities": []
+      },
+      {
+        "funding_agency": "European Clean Energy Council",
+        "project": "ALPINE",
+        "amount": 4200000,
+        "currency": "EUR",
+        "period": "2021-2025",
+        "companies": [
+          "Lumen Storage Systems (manufacturing)"
+        ],
+        "utilities": [
+          "Fjordgrid AS (pilot operation)"
+        ]
+      },
+      {
+        "funding_agency": "European Clean Energy Council",
+        "project": "RECLAIM",
+        "amount": 3100000,
+        "currency": "EUR",
+        "period": "2022-2027",
+        "companies": [
+          "Lumen Storage Systems (industrial partner)"
+        ],
+        "utilities": []
+      },
+      {
+        "funding_agency": "National Science Endowment of India",
+        "project": "MONSOON",
+        "amount": 380000000,
+        "currency": "INR",
+        "period": "2022-2027",
+        "companies": [],
+        "utilities": [
+          "Deccan Power Corporation (pilot operation)"
+        ]
+      }
+    ],
+    "timings_ms": [
+      106.99,
+      100.64,
+      105.42,
+      157.74,
+      89.02
+    ]
+  },
+  {
+    "question": "International reach: Rank researchers by the number of distinct countries represented among their co-authors (excluding their own).",
+    "query": "MATCH (r:Person)-[:AUTHORED]->(:Publication)\nWITH DISTINCT r\nMATCH (r)-[:AFFILIATED_WITH {current: true}]->(:Organization)-[:LOCATED_IN]->(home:Country)\nWITH r, collect(DISTINCT home) AS homes\nOPTIONAL MATCH (r)-[:AUTHORED]->(:Publication)<-[:AUTHORED]-(co:Person)\n               -[:AFFILIATED_WITH {current: true}]->(:Organization)-[:LOCATED_IN]->(c:Country)\nWHERE NOT c IN homes\nWITH r, homes, collect(DISTINCT c.name) AS foreign_countries\nRETURN r.name AS researcher,\n       [h IN homes | h.name] AS own_country,\n       size(foreign_countries) AS distinct_foreign_coauthor_countries,\n       foreign_countries\nORDER BY distinct_foreign_coauthor_countries DESC, researcher",
+    "records": [
+      {
+        "researcher": "Daniel Okafor",
+        "own_country": [
+          "Canada"
+        ],
+        "distinct_foreign_coauthor_countries": 2,
+        "foreign_countries": [
+          "India",
+          "Norway"
+        ]
+      },
+      {
+        "researcher": "Arjun Menon",
+        "own_country": [
+          "India"
+        ],
+        "distinct_foreign_coauthor_countries": 1,
+        "foreign_countries": [
+          "Canada"
+        ]
+      },
+      {
+        "researcher": "Elena Voss",
+        "own_country": [
+          "Germany"
+        ],
+        "distinct_foreign_coauthor_countries": 1,
+        "foreign_countries": [
+          "Norway"
+        ]
+      },
+      {
+        "researcher": "Hannah Brooks",
+        "own_country": [
+          "Canada"
+        ],
+        "distinct_foreign_coauthor_countries": 1,
+        "foreign_countries": [
+          "Norway"
+        ]
+      },
+      {
+        "researcher": "Ingrid Solberg",
+        "own_country": [
+          "Norway"
+        ],
+        "distinct_foreign_coauthor_countries": 1,
+        "foreign_countries": [
+          "Germany"
+        ]
+      },
+      {
+        "researcher": "Katarina Novak",
+        "own_country": [
+          "Germany"
+        ],
+        "distinct_foreign_coauthor_countries": 1,
+        "foreign_countries": [
+          "Norway"
+        ]
+      },
+      {
+        "researcher": "Priya Raghunathan",
+        "own_country": [
+          "India"
+        ],
+        "distinct_foreign_coauthor_countries": 1,
+        "foreign_countries": [
+          "Canada"
+        ]
+      },
+      {
+        "researcher": "Sofia Lindqvist",
+        "own_country": [
+          "Norway"
+        ],
+        "distinct_foreign_coauthor_countries": 1,
+        "foreign_countries": [
+          "Canada"
+        ]
+      },
+      {
+        "researcher": "Li Wei",
+        "own_country": [
+          "Canada"
+        ],
+        "distinct_foreign_coauthor_countries": 0,
+        "foreign_countries": []
+      },
+      {
+        "researcher": "Markus Weber",
+        "own_country": [
+          "Germany"
+        ],
+        "distinct_foreign_coauthor_countries": 0,
+        "foreign_countries": []
+      },
+      {
+        "researcher": "Tomas Berg",
+        "own_country": [
+          "Norway"
+        ],
+        "distinct_foreign_coauthor_countries": 0,
+        "foreign_countries": []
+      }
+    ],
+    "timings_ms": [
+      98.1,
+      99.43,
+      93.43,
+      204.9,
+      87.13
+    ]
+  },
+  {
+    "question": "Citation influence: Which publications cite the 2022 cathode stability paper, directly or indirectly (transitive citation chain)?",
+    "query": "MATCH (target:Publication {year: 2022})\nWHERE toLower(target.title) CONTAINS 'cathode stability'\nMATCH path = (citing:Publication)-[:CITES*1..]->(target)\nWITH citing, path ORDER BY length(path)\nWITH citing, collect(path)[0] AS shortest\nRETURN citing.title AS citing_publication,\n       citing.year AS year,\n       length(shortest) AS citation_depth,\n       CASE length(shortest) WHEN 1 THEN 'direct' ELSE 'indirect' END AS citation_type,\n       reduce(s = head(nodes(shortest)).title, n IN tail(nodes(shortest)) | s + ' -> ' + n.title) AS citation_chain\nORDER BY citation_depth, year, citing_publication",
+    "records": [
+      {
+        "citing_publication": "Sodium-Ion Cell Degradation Under Variable Grid Loads",
+        "year": 2023,
+        "citation_depth": 1,
+        "citation_type": "direct",
+        "citation_chain": "Sodium-Ion Cell Degradation Under Variable Grid Loads -> Sodium-Ion Cathode Stability in Solid-State Electrolytes"
+      },
+      {
+        "citing_publication": "Hydrometallurgical Recovery of Sodium-Ion Cathode Materials",
+        "year": 2024,
+        "citation_depth": 1,
+        "citation_type": "direct",
+        "citation_chain": "Hydrometallurgical Recovery of Sodium-Ion Cathode Materials -> Sodium-Ion Cathode Stability in Solid-State Electrolytes"
+      },
+      {
+        "citing_publication": "Thermal Management Strategies for Stationary Batteries in Hot Climates",
+        "year": 2024,
+        "citation_depth": 2,
+        "citation_type": "indirect",
+        "citation_chain": "Thermal Management Strategies for Stationary Batteries in Hot Climates -> Sodium-Ion Cell Degradation Under Variable Grid Loads -> Sodium-Ion Cathode Stability in Solid-State Electrolytes"
+      },
+      {
+        "citing_publication": "Forecast-Aware Dispatch of Grid Batteries",
+        "year": 2025,
+        "citation_depth": 2,
+        "citation_type": "indirect",
+        "citation_chain": "Forecast-Aware Dispatch of Grid Batteries -> Sodium-Ion Cell Degradation Under Variable Grid Loads -> Sodium-Ion Cathode Stability in Solid-State Electrolytes"
+      }
+    ],
+    "timings_ms": [
+      115.15,
+      96.41,
+      102.94,
+      141.21,
+      96.1
+    ]
+  },
+  {
+    "question": "Collaboration horizon: Starting from the Halvorsen Institute of Technology, which organizations are reachable within two project-collaboration hops, and through which projects?",
+    "query": "MATCH path = (start:Organization {name: 'Halvorsen Institute of Technology'})\n             ((:Organization)-[:PARTICIPATES_IN]->(:Project)<-[:PARTICIPATES_IN]-(:Organization)){1,2}\n             (target:Organization)\nWITH start, target, path, nodes(path) AS ns\nWHERE target <> start\n  AND all(n IN ns WHERE size([m IN ns WHERE m = n]) = 1)\nWITH target, length(path) / 2 AS hops,\n     reduce(s = head(ns).name, n IN tail(ns) |\n            s + CASE WHEN n:Project THEN ' -[' + n.name + ']-> ' ELSE n.name END) AS route\nWITH target, min(hops) AS min_hops, collect({hops: hops, route: route}) AS routes\nRETURN target.name AS organization,\n       min_hops AS hops,\n       [r IN routes WHERE r.hops = min_hops | r.route] AS via\nORDER BY hops, organization",
+    "records": [
+      {
+        "organization": "Fjordgrid AS",
+        "hops": 1,
+        "via": [
+          "Halvorsen Institute of Technology -[ALPINE]-> Fjordgrid AS"
+        ]
+      },
+      {
+        "organization": "Lumen Storage Systems",
+        "hops": 1,
+        "via": [
+          "Halvorsen Institute of Technology -[ALPINE]-> Lumen Storage Systems"
+        ]
+      },
+      {
+        "organization": "Maple Ridge University",
+        "hops": 1,
+        "via": [
+          "Halvorsen Institute of Technology -[CASCADE]-> Maple Ridge University"
+        ]
+      },
+      {
+        "organization": "Pacific Cell Technologies",
+        "hops": 1,
+        "via": [
+          "Halvorsen Institute of Technology -[CASCADE]-> Pacific Cell Technologies"
+        ]
+      },
+      {
+        "organization": "Rhine Valley University",
+        "hops": 1,
+        "via": [
+          "Halvorsen Institute of Technology -[ALPINE]-> Rhine Valley University"
+        ]
+      },
+      {
+        "organization": "Deccan Power Corporation",
+        "hops": 2,
+        "via": [
+          "Halvorsen Institute of Technology -[CASCADE]-> Maple Ridge University -[MONSOON]-> Deccan Power Corporation"
+        ]
+      },
+      {
+        "organization": "Southern Peninsula Institute of Science",
+        "hops": 2,
+        "via": [
+          "Halvorsen Institute of Technology -[CASCADE]-> Maple Ridge University -[MONSOON]-> Southern Peninsula Institute of Science"
+        ]
+      }
+    ],
+    "timings_ms": [
+      92.65,
+      111.2,
+      115.07,
+      201.19,
+      113.17
+    ]
+  },
+  {
+    "question": "Intellectual property to field: Which sites use technology covered by a patent held by Lumen Storage Systems, and which projects, operators and inventors are connected to them?",
+    "query": "MATCH (lumen:Organization {name: 'Lumen Storage Systems'})-[:HOLDS]->(pat:Patent)\n      -[:COVERS]->(tech:Technology)<-[:USES_TECHNOLOGY]-(site:Site)\nRETURN site.name AS site,\n       pat.id + ' - ' + pat.title AS patent,\n       tech.name AS technology,\n       EXISTS { (site)-[:IMPLEMENTS]->(pat) } AS built_to_patent_design,\n       COLLECT { MATCH (proj:Project)-[:ESTABLISHED]->(site) RETURN proj.name } AS site_projects,\n       COLLECT { MATCH (pat)-[:LICENSED_IN]->(lp:Project) RETURN lp.name } AS patent_licensed_in,\n       COLLECT { MATCH (op:Organization)-[:OPERATES]->(site) RETURN op.name ORDER BY op.name } AS operators,\n       COLLECT { MATCH (m:Person)-[:MANAGES]->(site) RETURN m.name } AS site_managers,\n       COLLECT { MATCH (sup:Organization)-[:SUPPLIED_CELLS_TO]->(site) RETURN sup.name } AS cell_supplier,\n       COLLECT { MATCH (inv:Person)-[:INVENTED]->(pat) RETURN inv.name ORDER BY inv.name } AS inventors\nORDER BY site",
+    "records": [
+      {
+        "site": "Tiruvallur Test Bed",
+        "patent": "LSS-PAT-2020-114 - Layered Sodium-Ion Cell with Composite Electrolyte Interface",
+        "technology": "Sodium-Ion Battery",
+        "built_to_patent_design": true,
+        "site_projects": [
+          "MONSOON"
+        ],
+        "patent_licensed_in": [
+          "ALPINE"
+        ],
+        "operators": [
+          "Deccan Power Corporation",
+          "Southern Peninsula Institute of Science"
+        ],
+        "site_managers": [
+          "Rahul Venkatesan"
+        ],
+        "cell_supplier": [
+          "Lumen Storage Systems"
+        ],
+        "inventors": [
+          "Elena Voss",
+          "Katarina Novak"
+        ]
+      },
+      {
+        "site": "Vestfjord Pilot Site",
+        "patent": "LSS-PAT-2020-114 - Layered Sodium-Ion Cell with Composite Electrolyte Interface",
+        "technology": "Sodium-Ion Battery",
+        "built_to_patent_design": true,
+        "site_projects": [
+          "ALPINE"
+        ],
+        "patent_licensed_in": [
+          "ALPINE"
+        ],
+        "operators": [
+          "Fjordgrid AS",
+          "Halvorsen Institute of Technology"
+        ],
+        "site_managers": [
+          "Tomas Berg"
+        ],
+        "cell_supplier": [
+          "Lumen Storage Systems"
+        ],
+        "inventors": [
+          "Elena Voss",
+          "Katarina Novak"
+        ]
+      }
+    ],
+    "timings_ms": [
+      87.81,
+      122.1,
+      116.19,
+      215.19,
+      102.52
+    ]
+  },
+  {
+    "question": "Collaborator recommendation: Suggest pairs of researchers who have never co-authored but share at least one common co-author, and whose work relates to the same technology area.",
+    "query": "MATCH (a:Person)-[:AUTHORED]->(:Publication)<-[:AUTHORED]-(common:Person)\n      -[:AUTHORED]->(:Publication)<-[:AUTHORED]-(b:Person)\nWHERE a.name < b.name\n  AND NOT EXISTS { (a)-[:AUTHORED]->(:Publication)<-[:AUTHORED]-(b) }\nWITH a, b, collect(DISTINCT common.name) AS common_coauthors\nMATCH (a)-[:AUTHORED]->(:Publication)-[:ABOUT]->(t:Technology)<-[:ABOUT]-(:Publication)<-[:AUTHORED]-(b)\nWITH a, b, common_coauthors, collect(DISTINCT t.name) AS shared_technology\nRETURN a.name AS researcher_1,\n       b.name AS researcher_2,\n       common_coauthors,\n       shared_technology,\n       size(common_coauthors) + size(shared_technology) AS score\nORDER BY score DESC, researcher_1, researcher_2",
+    "records": [
+      {
+        "researcher_1": "Li Wei",
+        "researcher_2": "Sofia Lindqvist",
+        "common_coauthors": [
+          "Daniel Okafor",
+          "Hannah Brooks"
+        ],
+        "shared_technology": [
+          "Load Forecasting"
+        ],
+        "score": 3
+      },
+      {
+        "researcher_1": "Arjun Menon",
+        "researcher_2": "Sofia Lindqvist",
+        "common_coauthors": [
+          "Daniel Okafor"
+        ],
+        "shared_technology": [
+          "Sodium-Ion Battery"
+        ],
+        "score": 2
+      },
+      {
+        "researcher_1": "Daniel Okafor",
+        "researcher_2": "Ingrid Solberg",
+        "common_coauthors": [
+          "Sofia Lindqvist"
+        ],
+        "shared_technology": [
+          "Sodium-Ion Battery"
+        ],
+        "score": 2
+      },
+      {
+        "researcher_1": "Daniel Okafor",
+        "researcher_2": "Tomas Berg",
+        "common_coauthors": [
+          "Sofia Lindqvist"
+        ],
+        "shared_technology": [
+          "Sodium-Ion Battery"
+        ],
+        "score": 2
+      },
+      {
+        "researcher_1": "Elena Voss",
+        "researcher_2": "Markus Weber",
+        "common_coauthors": [
+          "Katarina Novak"
+        ],
+        "shared_technology": [
+          "Sodium-Ion Battery"
+        ],
+        "score": 2
+      },
+      {
+        "researcher_1": "Elena Voss",
+        "researcher_2": "Sofia Lindqvist",
+        "common_coauthors": [
+          "Ingrid Solberg"
+        ],
+        "shared_technology": [
+          "Sodium-Ion Battery"
+        ],
+        "score": 2
+      },
+      {
+        "researcher_1": "Elena Voss",
+        "researcher_2": "Tomas Berg",
+        "common_coauthors": [
+          "Ingrid Solberg"
+        ],
+        "shared_technology": [
+          "Sodium-Ion Battery"
+        ],
+        "score": 2
+      },
+      {
+        "researcher_1": "Ingrid Solberg",
+        "researcher_2": "Markus Weber",
+        "common_coauthors": [
+          "Katarina Novak"
+        ],
+        "shared_technology": [
+          "Sodium-Ion Battery"
+        ],
+        "score": 2
+      },
+      {
+        "researcher_1": "Katarina Novak",
+        "researcher_2": "Sofia Lindqvist",
+        "common_coauthors": [
+          "Ingrid Solberg"
+        ],
+        "shared_technology": [
+          "Sodium-Ion Battery"
+        ],
+        "score": 2
+      },
+      {
+        "researcher_1": "Katarina Novak",
+        "researcher_2": "Tomas Berg",
+        "common_coauthors": [
+          "Ingrid Solberg"
+        ],
+        "shared_technology": [
+          "Sodium-Ion Battery"
+        ],
+        "score": 2
+      },
+      {
+        "researcher_1": "Priya Raghunathan",
+        "researcher_2": "Sofia Lindqvist",
+        "common_coauthors": [
+          "Daniel Okafor"
+        ],
+        "shared_technology": [
+          "Sodium-Ion Battery"
+        ],
+        "score": 2
+      }
+    ],
+    "timings_ms": [
+      109.91,
+      149.34,
+      108.07,
+      222.24,
+      106.36
+    ]
+  }
+]

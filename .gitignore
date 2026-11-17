@@ -1,0 +1,13 @@
+# credentials
+.env
+
+# python
+.venv/
+__pycache__/
+*.pyc
+
+# editor
+.vscode/
+.idea/
+
+# NOTE: results.csv is a deliverable and must stay tracked - do not add it here.
